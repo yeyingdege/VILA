@@ -105,7 +105,8 @@ def main(args):
         conversations = line["conversations"]
         qs = conversations[0]["value"]
         gt_answers = conversations[1]["value"]
-        results[idx] = {"qid": idx, "qs": qs, "gt": gt_answers,
+        results[idx] = {"qid": idx, "quest_type": quest_type, 
+                        "qs": qs, "gt": gt_answers,
                         "task_label": line["task_label"], 
                         "step_label": line["step_label"]}
 
@@ -148,12 +149,11 @@ def main(args):
             conv.append_message(conv.roles[1], None)
             prompt = conv.get_prompt()
 
-            input_ids = (tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).cuda())
             stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
             keywords = [stop_str]
-            stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
-
             if args.num_video_frames > 0:
+                input_ids = (tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).cuda())
+                stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
                 output_ids = model.generate(
                     input_ids,
                     images=images_tensor,
@@ -166,6 +166,9 @@ def main(args):
                     stopping_criteria=[stopping_criteria],
                 )
             else:
+                inputs = tokenizer([prompt])
+                input_ids = torch.as_tensor(inputs.input_ids).cuda()
+                stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
                 output_ids = model.generate(
                     input_ids,
                     do_sample=True if args.temperature > 0 else False,
@@ -258,7 +261,7 @@ if __name__ == "__main__":
     parser.add_argument("--temperature", type=float, default=0)
     parser.add_argument("--top_p", type=float, default=None)
     parser.add_argument("--num_beams", type=int, default=1)
-    parser.add_argument("--max_new_tokens", type=int, default=2048)
+    parser.add_argument("--max_new_tokens", type=int, default=1024)
     parser.add_argument("--num_video_frames", type=int, default=6)
     #parser.add_argument("--tokenizer_model_max_length", type=int, default=8192)
     args = parser.parse_args()
