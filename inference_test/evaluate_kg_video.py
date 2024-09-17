@@ -15,12 +15,10 @@ from llava.constants import IMAGE_PLACEHOLDER
 from llava.conversation import conv_templates, SeparatorStyle
 from llava.model.builder import load_pretrained_model
 from llava.utils import disable_torch_init
-from llava.mm_utils import tokenizer_image_token, process_images, get_model_name_from_path, is_gemma_tokenizer, KeywordsStoppingCriteria
-from torch.utils.data import Dataset, DataLoader
+from llava.mm_utils import tokenizer_image_token, process_images, get_model_name_from_path, KeywordsStoppingCriteria
 
 from llava.model.builder import load_pretrained_model
 from llava.data.decord_func import decord_video_given_start_end_seconds
-from llava.data.dataset import LazySupervisedDataset
 from llava.eval.mmmu_utils.eval_utils import parse_choice
 
 
@@ -66,6 +64,11 @@ def load_images(image_files):
     return out
 
 
+QUESTION_TYPES = ['qa1_step2tool', 'qa2_bestNextStep', 'qa3_nextStep',
+                  'qa4_step','qa5_task', 'qa6_precedingStep', 'qa7_bestPrecedingStep',
+                  'qa8_toolNextStep', 'qa9_bestInitial','qa10_bestFinal', 'qa11_domain']
+
+
 def main(args):
     # Load Model
     disable_torch_init()
@@ -83,17 +86,9 @@ def main(args):
 
     # Overall Accuracy for All Questions
     global_acc = TypeAccuracy("Global")
-    qa1_acc = TypeAccuracy("qa1_")
-    qa2_acc = TypeAccuracy("qa2_")
-    qa3_acc = TypeAccuracy("qa3_")
-    qa4_acc = TypeAccuracy("qa4_")
-    qa5_acc = TypeAccuracy("qa5_")
-    qa6_acc = TypeAccuracy("qa6_")
-    qa7_acc = TypeAccuracy("qa7_")
-    qa8_acc = TypeAccuracy("qa8_")
-    qa9_acc = TypeAccuracy("qa9_")
-    qa10_acc = TypeAccuracy("qa10_")
-    qa11_acc = TypeAccuracy("qa11_")
+    qa_acc = []
+    for t in range(len(QUESTION_TYPES)):
+        qa_acc.append(TypeAccuracy(f"qa{t+1}_"))
 
 
     total = 0
@@ -128,11 +123,7 @@ def main(args):
                 images =[ Image.fromarray(x).convert('RGB') for x in frames ]
                 n_images = len(images)
 
-                images_tensor = process_images(
-                    images,
-                    image_processor,
-                    model.config
-                ).to(model.device, dtype=torch.float16)
+                images_tensor = process_images(images, image_processor, model.config).to(model.device, dtype=torch.float16)
 
                 # replace <video> with <image>\n<image>\n....
                 img_placehoder = '<image>\n' * n_images 
@@ -156,7 +147,7 @@ def main(args):
                 stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
                 output_ids = model.generate(
                     input_ids,
-                    images=images_tensor,
+                    images=[images_tensor],
                     do_sample=True if args.temperature > 0 else False,
                     temperature=args.temperature,
                     top_p=args.top_p,
@@ -191,52 +182,18 @@ def main(args):
         # print("AI: {}\nParser: {}\nGT: {}\n".format(outputs, answer_id, gt_answers))
 
         global_acc.update(gt_answers, answer_id)
-        if "qa1_" in quest_type:
-            qa1_acc.update(gt_answers, answer_id)
-        elif "qa2_" in quest_type:
-            qa2_acc.update(gt_answers, answer_id)
-        elif "qa3_" in quest_type:
-            qa3_acc.update(gt_answers, answer_id)
-        elif "qa4_" in quest_type:
-            qa4_acc.update(gt_answers, answer_id)
-        elif "qa5_" in quest_type:
-            qa5_acc.update(gt_answers, answer_id)
-        elif "qa6_" in quest_type:
-            qa6_acc.update(gt_answers, answer_id)
-        elif "qa7_" in quest_type:
-            qa7_acc.update(gt_answers, answer_id)
-        elif "qa8_" in quest_type:
-            qa8_acc.update(gt_answers, answer_id)
-        elif "qa9_" in quest_type:
-            qa9_acc.update(gt_answers, answer_id)
-        elif "qa10_" in quest_type:
-            qa10_acc.update(gt_answers, answer_id)
-        elif "qa11_" in quest_type:
-            qa11_acc.update(gt_answers, answer_id)
-        else:
-            print(f"Unknown Type: {idx}")
+        for t in range(len(QUESTION_TYPES)):
+            if f"qa{t+1}_" in quest_type:
+                qa_acc[t].update(gt_answers, answer_id)
+
         # print each type accuracy
         print("-----"*5)
-        qa1_acc.print_accuracy()
-        qa2_acc.print_accuracy()
-        qa3_acc.print_accuracy()
-        qa4_acc.print_accuracy()
-        qa5_acc.print_accuracy()
-        qa6_acc.print_accuracy()
-        qa7_acc.print_accuracy()
-        qa8_acc.print_accuracy()
-        qa9_acc.print_accuracy()
-        qa10_acc.print_accuracy()
-        qa11_acc.print_accuracy()
-        global_acc.print_accuracy()
+        acc_list = []
+        for t in range(len(QUESTION_TYPES)):
+            qa_acc[t].print_accuracy()
+            acc_list.append(qa_acc[t].get_accuracy())
         print("-----"*5)
-        # average over type
-        avg_acc = (qa1_acc.get_accuracy() + qa2_acc.get_accuracy() 
-                   + qa3_acc.get_accuracy() + qa4_acc.get_accuracy() 
-                   + qa5_acc.get_accuracy() + qa6_acc.get_accuracy() 
-                   + qa7_acc.get_accuracy() + qa8_acc.get_accuracy() 
-                   + qa9_acc.get_accuracy() + qa10_acc.get_accuracy()
-                   + qa11_acc.get_accuracy()) / 11.0
+        avg_acc = sum(acc_list) / len(acc_list)
         print("Average Acc over Type: {:.4f}".format(avg_acc))
 
     # save all results

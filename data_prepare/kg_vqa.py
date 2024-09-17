@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import argparse
 from pathlib import Path
@@ -35,6 +36,14 @@ def get_file_name(one_type, folder):
     return file_name
 
 
+def add_spaces_to_camel_case(text):
+    # Check if the input already contains spaces
+    if " " in text:
+        return text
+    # Add a space before each uppercase letter (except the first one) and join them
+    return re.sub(r'(?<!^)(?=[A-Z])', ' ', text)
+ 
+
 def load_json(one_file, miss_vid_file, video_dir):
     with open(miss_vid_file, "r") as f:
         lines = f.readlines()
@@ -67,16 +76,17 @@ def load_json(one_file, miss_vid_file, video_dir):
         all_choices = []
         index2ans = {}
         for ii, one_opt in enumerate(options):
+            if "qa5_task" in question_type:
+                one_opt = add_spaces_to_camel_case(one_opt).lower()
             opts += ("({}) {};".format(ii, one_opt))
             all_choices.append(str(ii))
             index2ans[str(ii)] = one_opt
         opts = opts.rstrip(";")
         question = "<video>\n{} select from options: {}.".format(question, opts)
-        # question = "<video>\n{} - {}.".format(question, opts)
 
         one_sample["conversations"] = [
             { "from": "human", "value": question },
-            { "from":"gpt", "value": "{} {}".format(answer, options[answer]) }
+            { "from":"gpt", "value": "{} {}".format(answer, index2ans[str(answer)]) }
         ]
         one_sample["quest_type"] = question_type
         one_sample["start_secs"] = start_secs
