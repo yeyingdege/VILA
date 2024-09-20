@@ -192,6 +192,7 @@ def main(args):
         for t in range(len(QUESTION_TYPES)):
             qa_acc[t].print_accuracy()
             acc_list.append(qa_acc[t].get_accuracy())
+        global_acc.print_accuracy()
         print("-----"*5)
         avg_acc = sum(acc_list) / len(acc_list)
         print("Average Acc over Type: {:.4f}".format(avg_acc))
