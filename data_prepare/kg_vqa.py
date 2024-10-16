@@ -41,6 +41,19 @@ def split_words(input_string):
         return input_string
     formatted_string = re.sub(r'(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])', ' ', input_string)
     return formatted_string
+# print(split_words("MakeRJ45Cable"))
+
+# to_replace = ["AssembleDesktopPC", "ReplaceBatteryOnTVControl", "MakeRJ45Cable", 
+#               "AttendNBASkillsChallenge", "PerformCPR", "ReplaceCDDriveWithSSD",
+#               "ReplaceSIMCard"]
+replacement = {"Assemble Desktop P C": "Assemble Desktop PC",
+               "Replace Battery On T V Control": "Replace Battery On TV Control",
+               "Make R J45 Cable": "Make RJ45 Cable",
+               "Make R J45Cable": "Make RJ45 Cable",
+               "Attend N B A Skills Challenge": "Attend NBA Skills Challenge",
+               "Perform C P R": "Perform CPR",
+               "Replace C D Drive With S S D": "Replace CD Drive With SSD",
+               "Replace S I M Card": "Replace SIM Card"}
 
 
 def load_json(one_file, miss_vid_file, video_dir):
@@ -75,8 +88,9 @@ def load_json(one_file, miss_vid_file, video_dir):
         all_choices = []
         index2ans = {}
         for ii, one_opt in enumerate(options):
-            if "qa5_task" in question_type:
-                one_opt = split_words(one_opt)
+            one_opt = split_words(one_opt)
+            if one_opt in replacement.keys():
+                one_opt = replacement[one_opt]
             opts += ("({}) {};".format(ii, one_opt))
             all_choices.append(str(ii))
             index2ans[str(ii)] = one_opt
