@@ -36,13 +36,12 @@ def get_file_name(one_type, folder):
     return file_name
 
 
-def add_spaces_to_camel_case(text):
-    # Check if the input already contains spaces
-    if " " in text:
-        return text
-    # Add a space before each uppercase letter (except the first one) and join them
-    return re.sub(r'(?<!^)(?=[A-Z])', ' ', text)
- 
+def split_words(input_string):
+    if " " in input_string:
+        return input_string
+    formatted_string = re.sub(r'(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])', ' ', input_string)
+    return formatted_string
+
 
 def load_json(one_file, miss_vid_file, video_dir):
     with open(miss_vid_file, "r") as f:
@@ -77,7 +76,7 @@ def load_json(one_file, miss_vid_file, video_dir):
         index2ans = {}
         for ii, one_opt in enumerate(options):
             if "qa5_task" in question_type:
-                one_opt = add_spaces_to_camel_case(one_opt).lower()
+                one_opt = split_words(one_opt)
             opts += ("({}) {};".format(ii, one_opt))
             all_choices.append(str(ii))
             index2ans[str(ii)] = one_opt
