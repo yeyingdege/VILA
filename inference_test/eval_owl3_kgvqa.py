@@ -37,7 +37,11 @@ class TypeAccuracy(object):
 
 QUESTION_TYPES = ['qa1_step2tool', 'qa2_bestNextStep', 'qa3_nextStep',
                   'qa4_step','qa5_task', 'qa6_precedingStep', 'qa7_bestPrecedingStep',
-                  'qa8_toolNextStep', 'qa9_bestInitial','qa10_bestFinal', 'qa11_domain']
+                  'qa8_toolNextStep', 'qa9_bestInitial','qa10_bestFinal', 'qa11_domain',
+                  'qa12_toolPurpose', 'qa13_actionPurpose', 'qa14_objectPurpose',
+                  'qa15_ToolOtherPurpose', 'qa16_ObjectOtherPurpose', 'qa17_AlternativeTool',
+                  'qa18_AlternativeObject', 'qa19_TaskSameToolSamePurpose',
+                  'qa20_TaskSameObjectSamePurpose']
 
 
 def main(args):
@@ -150,10 +154,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", type=str, default="mPLUG/mPLUG-Owl3-7B-240728")
     parser.add_argument("--image-folder", type=str, default="data/COIN/videos")
-    parser.add_argument("--question-file", type=str, default="data/testing_vqa.json")
-    parser.add_argument("--answers-file", type=str, default="data/answers_owl3.json")
+    parser.add_argument("--question-file", type=str, default="data/testing_vqa20.json")
+    parser.add_argument("--answers-file", type=str, default="data/answers_owl3_f8.json")
     parser.add_argument("--temperature", type=float, default=0)
     parser.add_argument("--max_new_tokens", type=int, default=512)
-    parser.add_argument("--num_video_frames", type=int, default=6)
+    parser.add_argument("--num_video_frames", type=int, default=8)
     args = parser.parse_args()
     main(args)
