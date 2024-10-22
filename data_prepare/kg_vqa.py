@@ -6,6 +6,33 @@ from pathlib import Path
 from tqdm import tqdm
 
 
+CONFIG = {
+    "task_instructions": "",
+    "multi_choice_example_format": """{} select one from options:
+{}
+Return only the index of the correct answer (e.g. 1, 2, 3, 4, or 5)."""
+}
+
+CONFIG2 = {
+    "task_instructions": "The multiple-choice question is based on an instructional video. The goal is to select the best possible option based on the question and given choices, using reasoning and knowledge.\n",
+    "multi_choice_example_format": """{}
+{}
+Return only the index of the correct answer (e.g. 1, 2, 3, 4, or 5)."""
+}
+
+CONFIG_FOR_PRED = {
+    "task_instructions": "",
+    "multi_choice_example_format": """A vision model's prediciton results of task recognition and step recognition is provided below.
+Top {} task predictions:
+{}
+Top {} step predictions:
+{}
+{} select one from options:
+{}
+Return only the index of the correct answer (e.g. 1, 2, 3, 4, or 5)."""
+}
+
+
 def find_video_path_by_id(video_id, video_folder):
     # List all subfolders in video_folder
     video_folder = Path(video_folder)
@@ -56,7 +83,49 @@ replacement = {"Assemble Desktop P C": "Assemble Desktop PC",
                "Replace S I M Card": "Replace SIM Card"}
 
 
-def load_json(one_file, miss_vid_file, video_dir):
+def form_options(options, replacement):
+    opts = ""
+    all_choices = []
+    index2ans = {}
+    for ii, one_opt in enumerate(options):
+        one_opt = split_words(one_opt)
+        if one_opt in replacement.keys():
+            one_opt = replacement[one_opt]
+        opts += ("({}) {}\n".format(ii+1, one_opt))
+        all_choices.append(str(ii+1))
+        index2ans[str(ii+1)] = one_opt
+    opts = opts.rstrip("\n")
+    return opts, all_choices, index2ans
+
+
+def form_task_step_preds(pred, topk=5):
+    task_top5_classes = pred["task_top5_classes"]
+    task_top5_scores = pred["task_top5_scores"]
+    step_top5_classes = pred["step_top5_classes"]
+    step_top5_scores = pred["step_top5_scores"]
+
+    if topk > 1:
+        task_string = ""
+        step_string = ""
+        # normalize scores
+        sum1 = sum(task_top5_scores[:topk])
+        task_top5_scores = [round(score / sum1, 2) for score in task_top5_scores]
+        sum2 = sum(step_top5_scores[:topk])
+        step_top5_scores = [round(score / sum2, 2) for score in step_top5_scores]
+        for i in range(topk):
+            curr_task = f"{task_top5_classes[i]} ({task_top5_scores[i]}), "
+            task_string = task_string + curr_task
+            curr_step = f"{step_top5_classes[i]} ({step_top5_scores[i]}), "
+            step_string = step_string + curr_step
+        task_string = task_string.rstrip(", ")
+        step_string = step_string.rstrip(", ")
+    else:
+        task_string = task_top5_classes[0]
+        step_string = step_top5_classes[0]
+    return task_string, step_string
+
+
+def load_json(one_file, miss_vid_file, video_dir, use_pred_in_prompt, pred_file, topk=5):
     with open(miss_vid_file, "r") as f:
         lines = f.readlines()
         miss_list = [a.strip() for a in lines]
@@ -64,6 +133,10 @@ def load_json(one_file, miss_vid_file, video_dir):
     annots = ""
     with open(one_file, "r") as f:
         annots = json.load(f)
+
+    if use_pred_in_prompt:
+        preds = json.load(open(pred_file, "r"))
+        pred_dict = {list(item.keys())[0]: list(item.values())[0] for item in preds}
 
     sft_annots = []
     for one_line in tqdm(annots):
@@ -74,7 +147,7 @@ def load_json(one_file, miss_vid_file, video_dir):
 
         question = one_line['question']
         options  = one_line['options']
-        answer   = one_line['answer']
+        answer   = one_line['answer'] + 1
         step_id  = one_line['step']['id']
         start_secs = one_line['step']['segment'][0]
         end_secs   = one_line['step']['segment'][1]
@@ -84,18 +157,20 @@ def load_json(one_file, miss_vid_file, video_dir):
         one_sample["qid"] = one_line['qid']
         one_sample["video"] = find_video_path_by_id(video_id, video_dir)
 
-        opts = ""
-        all_choices = []
-        index2ans = {}
-        for ii, one_opt in enumerate(options):
-            one_opt = split_words(one_opt)
-            if one_opt in replacement.keys():
-                one_opt = replacement[one_opt]
-            opts += ("({}) {};".format(ii, one_opt))
-            all_choices.append(str(ii))
-            index2ans[str(ii)] = one_opt
-        opts = opts.rstrip(";")
-        question = "<video>\n{} select from options: {}.".format(question, opts)
+        opts, all_choices, index2ans = form_options(options, replacement)
+        if not use_pred_in_prompt:
+            # question = "<video>\n{} select from options: {}.".format(question, opts)
+            question = CONFIG["task_instructions"] + "<video>\n" + CONFIG["multi_choice_example_format"].format(question, opts)
+        else:
+            try:
+                pred = pred_dict[one_line['qid']].copy()
+                task_string, step_string = form_task_step_preds(pred, topk=topk)
+                question = CONFIG_FOR_PRED["task_instructions"] + "<video>\n" \
+                    + CONFIG_FOR_PRED["multi_choice_example_format"] \
+                    .format(topk, task_string, topk, step_string, question, opts)
+            except KeyError:
+                continue
+        # print(question)
 
         one_sample["conversations"] = [
             { "from": "human", "value": question },
@@ -126,7 +201,8 @@ def main(args):
 
             json_path = os.path.join(kgvqa_dir, filename)
             print("Processing {}...".format(json_path))
-            sft_annos = load_json(json_path, miss_vid_file, args.video_dir)
+            sft_annos = load_json(json_path, miss_vid_file, args.video_dir, 
+                                  args.use_pred_in_prompt, args.pred_file, args.topk)
 
             sft_blindqa = os.path.join(args.out_dir, f"{split}_vqa.json")
             with open(sft_blindqa, "w") as f:
@@ -142,5 +218,8 @@ if __name__ == "__main__":
     parser.add_argument("--video-dir", type=str, default="data/COIN/videos")
     parser.add_argument("--out-dir", type=str, default="data")
     parser.add_argument("--split", type=str, default="")
+    parser.add_argument("--use_pred_in_prompt", type=bool, default=False)
+    parser.add_argument("--pred_file", type=str, default="")
+    parser.add_argument("--topk", type=int, default=3)
     args = parser.parse_args()
     main(args)
