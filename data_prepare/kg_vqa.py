@@ -4,6 +4,7 @@ import json
 import argparse
 from pathlib import Path
 from tqdm import tqdm
+from process_retrievel import get_retrieval_info, get_task_step, std_taskname
 
 
 CONFIG = {
@@ -26,6 +27,15 @@ CONFIG_FOR_PRED = {
 Top {} task predictions:
 {}
 Top {} step predictions:
+{}
+{} select one from options:
+{}
+Return only the index of the correct answer (e.g. 1, 2, 3, 4, or 5)."""
+}
+
+CONFIG_FOR_RETRIEVAL = {
+    "task_instructions": "",
+    "multi_choice_example_format": """You are given the predicted task and step, their confident score, and the information retrieved from a knowledge graph based on the question. Answer the question based on the provided information.
 {}
 {} select one from options:
 {}
@@ -109,23 +119,25 @@ def form_task_step_preds(pred, topk=5):
         step_string = ""
         # normalize scores
         sum1 = sum(task_top5_scores[:topk])
-        task_top5_scores = [round(score / sum1, 2) for score in task_top5_scores]
+        task_top5_scores = [round(score / sum1, 4) for score in task_top5_scores]
         sum2 = sum(step_top5_scores[:topk])
-        step_top5_scores = [round(score / sum2, 2) for score in step_top5_scores]
+        step_top5_scores = [round(score / sum2, 4) for score in step_top5_scores]
         for i in range(topk):
-            curr_task = f"{task_top5_classes[i]} ({task_top5_scores[i]}), "
+            curr_task = f"{std_taskname(task_top5_classes[i])} ({task_top5_scores[i]}), "
             task_string = task_string + curr_task
             curr_step = f"{step_top5_classes[i]} ({step_top5_scores[i]}), "
             step_string = step_string + curr_step
         task_string = task_string.rstrip(", ")
         step_string = step_string.rstrip(", ")
     else:
-        task_string = task_top5_classes[0]
+        task_string = std_taskname(task_top5_classes[0])
         step_string = step_top5_classes[0]
     return task_string, step_string
 
 
-def load_json(one_file, miss_vid_file, video_dir, use_pred_in_prompt, pred_file, topk=5):
+def load_json(one_file, miss_vid_file, video_dir, 
+              use_pred_in_prompt, pred_file, 
+              use_retrieval, retrieval_file, topk=5):
     with open(miss_vid_file, "r") as f:
         lines = f.readlines()
         miss_list = [a.strip() for a in lines]
@@ -135,6 +147,11 @@ def load_json(one_file, miss_vid_file, video_dir, use_pred_in_prompt, pred_file,
         annots = json.load(f)
 
     if use_pred_in_prompt:
+        preds = json.load(open(pred_file, "r"))
+        pred_dict = {list(item.keys())[0]: list(item.values())[0] for item in preds}
+    
+    if use_retrieval:
+        retrieval_infos = json.load(open(retrieval_file, "r"))
         preds = json.load(open(pred_file, "r"))
         pred_dict = {list(item.keys())[0]: list(item.values())[0] for item in preds}
 
@@ -158,10 +175,7 @@ def load_json(one_file, miss_vid_file, video_dir, use_pred_in_prompt, pred_file,
         one_sample["video"] = find_video_path_by_id(video_id, video_dir)
 
         opts, all_choices, index2ans = form_options(options, replacement)
-        if not use_pred_in_prompt:
-            # question = "<video>\n{} select from options: {}.".format(question, opts)
-            question = CONFIG["task_instructions"] + "<video>\n" + CONFIG["multi_choice_example_format"].format(question, opts)
-        else:
+        if use_pred_in_prompt:
             try:
                 pred = pred_dict[one_line['qid']].copy()
                 task_string, step_string = form_task_step_preds(pred, topk=topk)
@@ -170,6 +184,18 @@ def load_json(one_file, miss_vid_file, video_dir, use_pred_in_prompt, pred_file,
                     .format(topk, task_string, topk, step_string, question, opts)
             except KeyError:
                 continue
+        elif use_retrieval:
+            if question_type in ['qa4_step','qa5_task']:
+                pred = pred_dict[one_line['qid']].copy()
+                retrieval = get_task_step(pred)
+            else:
+                retrieval = get_retrieval_info(retrieval_infos[one_line['qid']])
+            question = CONFIG_FOR_RETRIEVAL["task_instructions"] + "<video>\n" \
+                    + CONFIG_FOR_RETRIEVAL["multi_choice_example_format"] \
+                    .format(retrieval, question, opts)
+        else:
+            # question = "<video>\n{} select from options: {}.".format(question, opts)
+            question = CONFIG["task_instructions"] + "<video>\n" + CONFIG["multi_choice_example_format"].format(question, opts)
         # print(question)
 
         one_sample["conversations"] = [
@@ -202,9 +228,10 @@ def main(args):
             json_path = os.path.join(kgvqa_dir, filename)
             print("Processing {}...".format(json_path))
             sft_annos = load_json(json_path, miss_vid_file, args.video_dir, 
-                                  args.use_pred_in_prompt, args.pred_file, args.topk)
+                                  args.use_pred_in_prompt, args.pred_file, 
+                                  args.use_retrieval, args.retrieval_file, args.topk)
 
-            sft_blindqa = os.path.join(args.out_dir, f"{split}_vqa.json")
+            sft_blindqa = os.path.join(args.out_dir, f"{split}_vqa19.json")
             with open(sft_blindqa, "w") as f:
                 json.dump(sft_annos, f, indent=2)
     print("Process Finished")
@@ -220,6 +247,8 @@ if __name__ == "__main__":
     parser.add_argument("--split", type=str, default="")
     parser.add_argument("--use_pred_in_prompt", type=bool, default=False)
     parser.add_argument("--pred_file", type=str, default="")
+    parser.add_argument("--use_retrieval", type=bool, default=False)
+    parser.add_argument("--retrieval_file", type=str, default="data/rephrased_QA_25Oct24_v2/retrieval_25Oct24_v2_2-testing.json")
     parser.add_argument("--topk", type=int, default=3)
     args = parser.parse_args()
     main(args)

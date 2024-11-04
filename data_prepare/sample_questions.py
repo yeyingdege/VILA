@@ -2,10 +2,10 @@ import json
 
 
 num_question_per_type = 30
-total_sample = num_question_per_type * 20
+total_sample = num_question_per_type * 19
 
-origin_file = "data/rephrased_QA_15Oct24_v2/testing.json"
-save_file = "data/rephrased_QA_15Oct24_v2/testing_sampled_rephrase_v2.json"
+origin_file = "data/rephrased_QA_25Oct24_v2/testing.json"
+save_file = "data/QA_25Oct24_testing_sampled.json"
 miss_vid_file = "data/kgvqa/miss_vid_list_1494.txt"
 
 sampled_json = {}

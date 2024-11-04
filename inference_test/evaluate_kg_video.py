@@ -69,9 +69,10 @@ QUESTION_TYPES = ['qa1_step2tool', 'qa2_bestNextStep', 'qa3_nextStep',
                   'qa8_toolNextStep', 'qa9_bestInitial','qa10_bestFinal', 'qa11_domain',
                   'qa12_toolPurpose', 'qa13_actionPurpose', 'qa14_objectPurpose',
                   'qa15_ToolOtherPurpose', 'qa16_ObjectOtherPurpose', 'qa17_AlternativeTool',
-                  'qa18_AlternativeObject', 'qa19_TaskSameToolSamePurpose',
-                  'qa20_TaskSameObjectSamePurpose']
-
+                  'qa18_TaskSameToolSamePurpose', 'qa19_TaskSameObjectSamePurpose']
+# SKIP_EVAL_TYPES = ['qa1_step2tool', 'qa2_bestNextStep', 'qa3_nextStep',
+#                    'qa4_step','qa5_task', 'qa6_precedingStep', 'qa7_bestPrecedingStep',
+#                    'qa9_bestInitial','qa10_bestFinal', 'qa11_domain']
 
 def main(args):
     # Load Model
@@ -216,8 +217,8 @@ if __name__ == "__main__":
     parser.add_argument("--model-base", type=str, default=None)
     parser.add_argument("--conv-mode", type=str, default="vicuna_v1")
     parser.add_argument("--image-folder", type=str, default="data/COIN/videos")
-    parser.add_argument("--question-file", type=str, default="data/testing_vqa20.json")
-    parser.add_argument("--answers-file", type=str, default="data/answers_vila3b_f8.json")
+    parser.add_argument("--question-file", type=str, default="data/testing_vqa19_25oct_v2.json")
+    parser.add_argument("--answers-file", type=str, default="data/answers_25oct/answers_vila3b_f8_25oct.json")
     parser.add_argument("--num-chunks", type=int, default=1)
     parser.add_argument("--chunk-idx", type=int, default=0)
     parser.add_argument("--temperature", type=float, default=0)
