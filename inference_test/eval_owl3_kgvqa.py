@@ -41,6 +41,7 @@ QUESTION_TYPES = ['qa1_step2tool', 'qa2_bestNextStep', 'qa3_nextStep',
                   'qa12_toolPurpose', 'qa13_actionPurpose', 'qa14_objectPurpose',
                   'qa15_ToolOtherPurpose', 'qa16_ObjectOtherPurpose', 'qa17_AlternativeTool',
                   'qa18_TaskSameToolSamePurpose', 'qa19_TaskSameObjectSamePurpose']
+SKIP_EVAL_TYPES = ['qa4_step','qa5_task']
 
 
 def main(args):
@@ -69,6 +70,8 @@ def main(args):
         # Q-A Pair
         idx = line["qid"]
         quest_type = line["quest_type"]
+        if quest_type in SKIP_EVAL_TYPES:
+            continue
         conversations = line["conversations"]
         qs = conversations[0]["value"]
         gt_answers = conversations[1]["value"]
@@ -153,8 +156,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", type=str, default="mPLUG/mPLUG-Owl3-7B-240728")
     parser.add_argument("--image-folder", type=str, default="data/COIN/videos")
-    parser.add_argument("--question-file", type=str, default="data/testing_vqa20_rephrase_v2_pred_top3.json")
-    parser.add_argument("--answers-file", type=str, default="data/answers_rephrase_v2/answers_owl3_f8_rephrase_v2_pred_top3.json")
+    parser.add_argument("--question-file", type=str, default="data/testing_vqa19_25oct_v2.json")
+    parser.add_argument("--answers-file", type=str, default="data/answers_25oct/answers_owl3_f8_25oct.json")
     parser.add_argument("--temperature", type=float, default=0)
     parser.add_argument("--max_new_tokens", type=int, default=512)
     parser.add_argument("--num_video_frames", type=int, default=8)

@@ -92,11 +92,64 @@ def get_task_step(pred):
     return txt
 
 
-# retrieval_info = json.load(open("data/rephrased_QA_25Oct24_v2/retrieval_25Oct24_v2_2-testing.json", "r"))
+def get_task_step_compact(pred):
+    '''
+    Top 5 task predictions: str (), str()...
+    Top 5 step predictions: str (), str()...
+    '''
+    task_top5_classes = pred["task_top5_classes"]
+    task_top5_scores = pred["task_top5_scores"]
+    step_top5_classes = pred["step_top5_classes"]
+    step_top5_scores = pred["step_top5_scores"]
+
+    task_string = ""
+    step_string = ""
+    # normalize scores
+    sum1 = sum(task_top5_scores)
+    task_top5_scores = [round(score / sum1, 2) for score in task_top5_scores]
+    sum2 = sum(step_top5_scores)
+    step_top5_scores = [round(score / sum2, 2) for score in step_top5_scores]
+    for i in range(len(task_top5_classes)):
+        curr_task = f"{std_taskname(task_top5_classes[i])} ({task_top5_scores[i]}), "
+        task_string = task_string + curr_task
+        curr_step = f"{step_top5_classes[i]} ({step_top5_scores[i]}), "
+        step_string = step_string + curr_step
+    task_string = task_string.rstrip(", ")
+    step_string = step_string.rstrip(", ")
+    txt = f"Top 5 task predictions: {task_string}\nTop 5 step predictions: {step_string}"
+    return txt
+
+
+def get_cypher_retrieval_info(info, pred):
+    '''
+    CYPHER query: ""
+    Retrieved data: []
+    '''
+    pred_str = get_task_step_compact(pred)
+    tmp = []
+    for k, v in info.items():
+        s = ""
+        if v is not None and len(v) > 0:
+            s += f"CYPHER query: {k}\nRetrieved data: {v}"
+            tmp.append(s)
+    if len(tmp) > 0:
+        txt = "Retrieved data for the relevant CYPHER query:\n"
+        txt += '\n'.join(tmp)
+    else:
+        txt = "Retrieved data for the relevant CYPHER query: None\n"
+    txt = f"{pred_str}\n{txt}"
+    return txt
+
+
+# retrieval_info = json.load(open("data/rephrased_QA_25Oct24_v2/cypher_with_example_test_10_vila8b_f8-retrieved_data.json", "r"))
+# preds = json.load(open("data/QA_25Oct24_testing_pred.json", "r"))
+# pred_dict = {list(item.keys())[0]: list(item.values())[0] for item in preds}
 # # test_exp = "qa12_toolPurpose_19191"
 # # test_exp = "qa18_TaskSameToolSamePurpose_17818"
-# test_exp = "qa1_step2tool_33305"
+# # test_exp = "qa1_step2tool_33305"
+# test_exp = "qa1_step2tool_36614" # without retrieval data
 # info = retrieval_info[test_exp]
-# res = get_retrieval_info(info)
-# print(len(res), res)
+# pred = pred_dict[test_exp].copy()
+# res = get_cypher_retrieval_info(info, pred)
+# print(res)
 

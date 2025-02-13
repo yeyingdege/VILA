@@ -4,7 +4,7 @@ import json
 import argparse
 from pathlib import Path
 from tqdm import tqdm
-from process_retrievel import get_retrieval_info, get_task_step, std_taskname
+from process_retrievel import get_retrieval_info, get_task_step, std_taskname, get_cypher_retrieval_info
 
 
 CONFIG = {
@@ -36,6 +36,15 @@ Return only the index of the correct answer (e.g. 1, 2, 3, 4, or 5)."""
 CONFIG_FOR_RETRIEVAL = {
     "task_instructions": "",
     "multi_choice_example_format": """You are given the predicted task and step, their confident score, and the information retrieved from a knowledge graph based on the question. Answer the question based on the provided information.
+{}
+{} select one from options:
+{}
+Return only the index of the correct answer (e.g. 1, 2, 3, 4, or 5)."""
+}
+
+CONFIG_FOR_CYPHER_RETRIEVAL = {
+    "task_instructions": "",
+    "multi_choice_example_format": """You are given the predicted task and step, their confident score, and the information retrieved from a knowledge graph using the cypher queries. Answer the question based on the provided information.
 {}
 {} select one from options:
 {}
@@ -156,6 +165,7 @@ def load_json(one_file, miss_vid_file, video_dir,
         pred_dict = {list(item.keys())[0]: list(item.values())[0] for item in preds}
 
     sft_annots = []
+    none_retrieval_cnt = 0
     for one_line in tqdm(annots):
         video_id = one_line['video_id']
         if video_id in miss_list:
@@ -185,13 +195,15 @@ def load_json(one_file, miss_vid_file, video_dir,
             except KeyError:
                 continue
         elif use_retrieval:
-            if question_type in ['qa4_step','qa5_task']:
-                pred = pred_dict[one_line['qid']].copy()
-                retrieval = get_task_step(pred)
+            pred = pred_dict[one_line['qid']].copy()
+            if one_line['qid'] in retrieval_infos:
+                retrieval_info = retrieval_infos[one_line['qid']]
             else:
-                retrieval = get_retrieval_info(retrieval_infos[one_line['qid']])
-            question = CONFIG_FOR_RETRIEVAL["task_instructions"] + "<video>\n" \
-                    + CONFIG_FOR_RETRIEVAL["multi_choice_example_format"] \
+                none_retrieval_cnt += 1
+                retrieval_info = {}
+            retrieval = get_cypher_retrieval_info(retrieval_info, pred)
+            question = CONFIG_FOR_CYPHER_RETRIEVAL["task_instructions"] + "<video>\n" \
+                    + CONFIG_FOR_CYPHER_RETRIEVAL["multi_choice_example_format"] \
                     .format(retrieval, question, opts)
         else:
             # question = "<video>\n{} select from options: {}.".format(question, opts)
@@ -210,7 +222,7 @@ def load_json(one_file, miss_vid_file, video_dir,
         one_sample["task_label"] = one_line["task_label"]
         one_sample["step_label"] = one_line["step"]["label"]
         sft_annots.append(one_sample)
-
+    print("none_retrieval_cnt", none_retrieval_cnt)
     return sft_annots
 
 
@@ -218,22 +230,14 @@ def main(args):
     kgvqa_dir = args.kgvqa_dir
     miss_vid_file = os.path.join(kgvqa_dir, args.miss_vid_file)
 
-    for filename in os.listdir(kgvqa_dir):
-        if filename.endswith('.json'):
-            split, ext = filename.split(".")
-            # if split is provided, only process the split file
-            if args.split != "" and args.split not in split:
-                continue
+    json_path = args.in_file
+    print("Processing {}...".format(json_path))
+    sft_annos = load_json(json_path, miss_vid_file, args.video_dir, 
+                            args.use_pred_in_prompt, args.pred_file, 
+                            args.use_retrieval, args.retrieval_file, args.topk)
 
-            json_path = os.path.join(kgvqa_dir, filename)
-            print("Processing {}...".format(json_path))
-            sft_annos = load_json(json_path, miss_vid_file, args.video_dir, 
-                                  args.use_pred_in_prompt, args.pred_file, 
-                                  args.use_retrieval, args.retrieval_file, args.topk)
-
-            sft_blindqa = os.path.join(args.out_dir, f"{split}_vqa19.json")
-            with open(sft_blindqa, "w") as f:
-                json.dump(sft_annos, f, indent=2)
+    with open(args.out_file, "w") as f:
+        json.dump(sft_annos, f, indent=2)
     print("Process Finished")
 
 
@@ -246,9 +250,11 @@ if __name__ == "__main__":
     parser.add_argument("--out-dir", type=str, default="data")
     parser.add_argument("--split", type=str, default="")
     parser.add_argument("--use_pred_in_prompt", type=bool, default=False)
-    parser.add_argument("--pred_file", type=str, default="")
+    parser.add_argument("--pred_file", type=str, default="data/QA_25Oct24_testing_pred.json")
     parser.add_argument("--use_retrieval", type=bool, default=False)
-    parser.add_argument("--retrieval_file", type=str, default="data/rephrased_QA_25Oct24_v2/retrieval_25Oct24_v2_2-testing.json")
-    parser.add_argument("--topk", type=int, default=3)
+    parser.add_argument("--retrieval_file", type=str, default="data/rephrased_QA_25Oct24_v2/cypher_with_example_test_10_vila8b_blind-retrieved_data.json")
+    parser.add_argument("--topk", type=int, default=5)
+    parser.add_argument("--in-file", type=str, default="data/kgvqa/testing.json")
+    parser.add_argument("--out-file", type=str, default="data/testing_vqa17_12Feb25.json")
     args = parser.parse_args()
     main(args)
