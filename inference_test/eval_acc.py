@@ -62,27 +62,29 @@ def merge_results(file1, file2,
         # # don't use qa8 results of file1
         # if item["quest_type"]=='qa8_toolNextStep':
         #     continue
+        if qid in merged_data:
+            continue
         merged_data[qid] = item
     return merged_data
 
-def main_merge_and_filter():
+def main_merge_and_filter(file1, file2, save_file):
     cvpr_ds_num = 48019
     iccv_ds_num = 46921
     qid_file = "data/kgvqa/testing.json"
-    file1 = "data/answers_25oct_full/answers_vila8b_f8_25oct.json"
-    file2 = "data/answers_12Feb25/answers_vila8b_f8_12Feb25.json"
-    save_file="data/answers_12Feb25_full/answers_vila8b_f8_12Feb25.json"
+    # qid_file = "data/testing_vqa19_25oct_v2.json"
 
     merged_data = merge_results(file1, file2)
     filtered_data = filter_results_by_qid(merged_data, qid_file)
-    assert len(filtered_data)==iccv_ds_num, f"total number of test set is incorrect! {len(merged_data)} not 48019"
+    assert len(filtered_data)==iccv_ds_num, f"total number of test set is incorrect! {len(merged_data)} not {iccv_ds_num}"
     with open(save_file, "w") as f:
         json.dump(filtered_data, f, indent=2)
     print("Saved data to", save_file)
 
 
 if __name__=="__main__":
-    # main_merge_and_filter()
+    file1 = "data/answers_25oct_full/answers_vila3b_f8_25oct.json"
+    file2 = "data/answers_12Feb25/answers_vila3b_f8_12Feb25.json"
+    save_file = "data/answers_12Feb25_full/answers_vila3b_f8_12Feb25.json"
+    main_merge_and_filter(file1, file2, save_file)
+    eval(answer_file=save_file)
 
-    answer_file = "data/answers_12Feb25_full/answers_vila8b_f8_12Feb25.json"
-    eval(answer_file)
